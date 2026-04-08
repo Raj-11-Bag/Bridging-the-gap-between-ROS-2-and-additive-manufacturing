@@ -5,6 +5,11 @@ A robust control framework enabling continuous, starvation-free material deposit
 
 ---
 
+## 🎥 Demonstration
+
+[![Watch the video](https://img.youtube.com/vi/ORa4JMzHrFo/0.jpg)](https://www.youtube.com/shorts/ORa4JMzHrFo)
+---
+
 ## 📌 Overview
 
 This project presents a real-time synchronization framework for robotic additive manufacturing (AM), addressing a critical challenge in open-source systems:
@@ -242,11 +247,7 @@ presentation.pdf → Defense slides
 README.md        → Documentation  
 ```
 
----
 
-## 🎥 Demonstration
-
-[![Watch the video](https://img.youtube.com/vi/ORa4JMzHrFo/0.jpg)](https://www.youtube.com/shorts/ORa4JMzHrFo)
 
 
 ---
