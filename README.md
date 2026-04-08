@@ -1,197 +1,268 @@
-🚀 ROS 2-Based Real-Time Synchronization for Robotic Additive Manufacturing
-📌 Overview
 
-This repository presents a real-time synchronization framework for robotic additive manufacturing (AM), developed as part of a master’s thesis. The system enables continuous and stable material deposition by coordinating robot motion and extrusion using a ROS 2-based control architecture.
+# 🚀 Real-Time ROS 2 Synchronization for Robotic Additive Manufacturing
 
-The key contribution is an acknowledgment-aware windowed streaming mechanism that ensures bounded latency and prevents extrusion starvation when interfacing with open-source firmware.
+A robust control framework enabling continuous, starvation-free material deposition by synchronizing robot motion and extrusion using ROS 2 and open-source firmware.
 
-🎯 Motivation
+---
 
-Robotic additive manufacturing introduces flexibility in terms of:
+## 📌 Overview
 
-Multi-axis deposition
-Large-scale fabrication
-Non-planar geometries
+This project presents a real-time synchronization framework for robotic additive manufacturing (AM), addressing a critical challenge in open-source systems:
+reliable coordination between robot motion and extrusion under non-deterministic communication conditions.
 
-However, synchronization between robot motion and extrusion remains a major challenge, especially in open-source systems where:
+A custom ROS 2 coordinator node is developed to regulate command transmission using an acknowledgment-aware windowing strategy, ensuring:
 
-Communication latency is variable
-Controllers operate asynchronously
-Buffering is not explicitly managed
+* Stable and continuous material deposition
+* Bounded latency
+* Elimination of extrusion starvation
 
-This work addresses the lack of reliable real-time coordination between ROS 2 and extrusion firmware (Marlin).
+---
 
-🧠 Core Idea
+## 🎯 Problem
 
-Instead of naïvely streaming commands, this system implements a bounded, acknowledgment-driven command window:
+In robotic AM, motion and extrusion are controlled by independent subsystems:
 
-Maintain a fixed range of in-flight commands
-Use firmware acknowledgments (ok) as feedback
-Dynamically regulate command transmission
-🏗️ System Architecture
-+---------------------+        TCP        +----------------------+
-|     ROS 2 Node      | --------------->  |    Robot Controller  |
-| (Coordinator Node)  |                  |     (igus ReBeL)     |
-|                     |                  +----------------------+
-|                     |
-|                     | USB Serial
-|                     v
-|              +----------------------+
-|              |   Marlin Firmware    |
-|              |   (SKR Controller)   |
-|              +----------------------+
-|
-+--------------------------------------------------------------+
-⚙️ Hardware Setup
-Component	Description
-Robot	igus ReBeL (6-DOF robotic arm)
-Extruder	Hemera XS
-Controller	SKR Mini E3
-Firmware	Marlin
-Communication	TCP (robot), USB Serial (extruder)
-💻 Software Stack
-ROS 2 (Python-based node)
-Custom coordinator node: /rebel_marlin_coordinator
-rqt_graph (visualization)
-CSV logging for data analysis
-🔁 Control Loop
+```bash
+Robot     → trajectory execution (TCP motion)
+Extruder  → firmware-based command execution (Marlin)
+```
 
+This leads to:
+
+* ❌ Starvation → gaps in deposition
+* ❌ Buffer overflow → delayed execution
+* ❌ Loss of synchronization → poor print quality
+
+Conventional streaming methods fail because they ignore execution feedback.
+
+---
+
+## 💡 Solution
+
+This work introduces an acknowledgment-aware, bounded streaming mechanism:
+
+* Maintain a controlled number of in-flight commands
+* Use firmware acknowledgments (`ok`) as real-time feedback
+* Dynamically regulate command flow
+
+### 🔒 Window Control
+
+```bash
+N_min = 8    → Prevent starvation  
+N_max = 12   → Prevent overflow  
+```
+
+This transforms an open-loop system into a feedback-driven synchronization process.
+
+---
+
+## 🏗️ System Architecture
+
+```bash
+          +----------------------------+
+          |        ROS 2 Node          |
+          |  (Coordinator Controller) |
+          +------------+--------------+
+                       |
+             TCP       |        USB Serial
+                       |
+        +--------------v--------+     +----------------------+
+        |   Robot Controller    |     |   Marlin Firmware    |
+        |     (igus ReBeL)      |     |   (SKR Mini E3)      |
+        +-----------------------+     +----------------------+
+```
+
+---
+
+## ⚙️ Hardware
+
+```bash
+Robot: igus ReBeL (6-DOF)
+Extruder: Hemera XS
+Controller: SKR Mini E3
+Firmware: Marlin
+Interfaces: TCP (robot), USB serial (extruder)
+```
+
+---
+
+## 💻 Software
+
+```bash
+ROS 2 (Python-based implementation)
+Custom node: /rebel_marlin_coordinator
+Data logging (CSV)
+Visualization (rqt_graph)
+```
+
+---
+
+## 🔁 Control Loop
+
+```bash
 Frequency: 50 Hz (Δt = 20 ms)
+```
 
-Each cycle:
+Each cycle executes:
 
-Compute robot motion (TCP trajectory)
-Calculate extrusion increment
-Send G-code command (G1 E...)
-Receive acknowledgment (ok)
-Update in-flight command count
-Enforce window bounds
-📐 Mathematical Model
-Volumetric Flow
-Q = w × h × v
-Extrusion Rate
-E_dot = Q / A_f
-Discrete Extrusion
-ΔE = E_dot × Δt
+* Robot motion update
+* Extrusion computation
+* G-code transmission (`G1 E...`)
+* Acknowledgment reception (`ok`)
+* In-flight queue update
+* Window constraint enforcement
+
+---
+
+## 📐 Process Model
+
+```bash
+Q  = w × h × v
+Ė = Q / A_f
+ΔE = Ė × Δt
+```
 
 Where:
 
-w = bead width
-h = layer height
-v = speed
+```bash
+w   = bead width
+h   = layer height
+v   = speed
 A_f = filament cross-section
-🔒 Synchronization Strategy
-Window Constraints
-N_min = 8
-N_max = 12
-Behavior
-Condition	Action
-inflight < N_min	Send commands (avoid starvation)
-inflight > N_max	Pause sending (avoid overflow)
-ack received	Decrease inflight
-📊 Experimental Setup
-Test Cases:
+```
+
+---
+
+## 📊 Experimental Validation
+
+### Test Conditions
+
+```bash
 Straight-line deposition
-Square plate
-Continuous paths
-Speeds:
-30 mm/s
-60 mm/s
-📈 Results
-Naïve Streaming
-In-flight commands: >700
-Starvation events: Present
-Result: Discontinuous deposition
-Windowed Streaming
-In-flight commands: 8–12
-Starvation events: None
-Result: Continuous deposition
-⏱️ Latency Analysis
-Metric	Value
-Median	~12 ms
-p95	~25 ms
-p99	~40 ms
-📉 Performance Visualization
-In-flight Commands
-Naïve: Unbounded growth (>700)
-Windowed: Stable (8–12)
-Latency
-Naïve: Up to ~3.5 s
-Windowed: < 0.12 s
-💰 Cost Analysis
-Operational Cost
-Component	Cost
-Material	0.25–0.50 €/h
-Energy	~0.07 €/h
-Industrial Cost
-Component	Cost
-Labour	12.83 €/h
-Depreciation	~1.04 €/h
-Total	~16 €/h
-⚠️ Challenges & Solutions
-1. Synchronization mismatch
+Square geometry
+Speeds: 30 mm/s and 60 mm/s
+```
 
-❗ Problem: Motion and extrusion unsynchronized
-✅ Solution: Ack-aware windowing
+### 📉 Results Comparison
 
-2. Latency & jitter
+| Metric             | Naïve Streaming  | Windowed Control |
+| ------------------ | ---------------- | ---------------- |
+| In-flight commands | >700 (unbounded) | 8–12 (bounded)   |
+| Starvation events  | Present          | None             |
+| Deposition quality | Discontinuous    | Continuous       |
 
-❗ Problem: Communication delays
-✅ Solution: Bounded in-flight queue
+---
 
-3. Starvation
+## ⏱️ Latency Performance
 
-❗ Problem: Empty planner buffer
-✅ Solution: Maintain minimum window
+| Metric | Value  |
+| ------ | ------ |
+| Median | ~12 ms |
+| p95    | ~25 ms |
+| p99    | ~40 ms |
 
-4. Overflow
+---
 
-❗ Problem: Excess commands
-✅ Solution: Enforce upper bound
+## 📈 Key Observations
 
-5. Hardware instability
+* Without control → queue explosion + unstable extrusion
+* With windowing → predictable, stable system behavior
+* Continuous bead formation achieved in all test cases
 
-❗ Problem: Hotend silicone failure
-✅ Solution: Identified and documented
+---
 
-🚧 Limitations
-Open-loop extrusion (no feedback control)
-Planar toolpaths only
-No retraction implemented
-Limited process optimization
-🔮 Future Work
-Integration with ros2_control
-Closed-loop extrusion control
-Multi-axis / curved printing
-Vision-based monitoring
-Process parameter optimization
-🌟 Contributions
-ROS 2-based robotic AM coordination
-Acknowledgment-aware synchronization
-Starvation-free continuous deposition
-Open-source, reproducible framework
-📂 Repository Structure
-/src            → ROS 2 node implementation  
-/data           → Experimental logs (CSV)  
-/plots          → Latency & inflight graphs  
-/images         → Print results & diagrams  
-thesis.pdf      → Full thesis  
-presentation.pdf→ Defense slides  
-README.md       → Project documentation  
-🎥 Demonstration
+## 💰 Cost Overview
 
-👉 [Insert Video Link Here]
+### Operational Cost
 
-🔗 References / Related Work
-ROS 2 middleware
-Marlin firmware
-Robotic additive manufacturing literature
-📬 Contact
+```bash
+Material: 0.25–0.50 €/h
+Energy: ~0.07 €/h
+```
 
-Author: [Your Name]
-Email: [Your Email]
-Institution: [Your University]
+### Industrial Estimate
 
-🏁 Final Note
+```bash
+Labour: 12.83 €/h
+Depreciation: ~1.04 €/h
+Total: ~16 €/h
+```
 
-This project demonstrates that reliable real-time robotic additive manufacturing is achievable using low-cost, open-source systems when proper synchronization strategies are applied.
+---
+
+## ⚠️ Challenges & Solutions
+
+| Challenge                | Solution                 |
+| ------------------------ | ------------------------ |
+| Synchronization mismatch | Ack-aware windowing      |
+| Communication latency    | Bounded command buffer   |
+| Starvation               | Maintain minimum window  |
+| Buffer overflow          | Enforce upper bound      |
+| Hardware instability     | Diagnosed and documented |
+
+---
+
+## 🚧 Limitations
+
+* Open-loop extrusion (no feedback sensors)
+* Planar toolpaths only
+* No retraction strategy
+* Limited process tuning
+
+---
+
+## 🔮 Future Work
+
+* Integration with ros2_control
+* Closed-loop extrusion control
+* Multi-axis / curved deposition
+* Vision-based monitoring
+* Process optimization
+
+---
+
+## 🌟 Contributions
+
+* ROS 2-based robotic AM coordination
+* Acknowledgment-aware synchronization strategy
+* Starvation-free continuous deposition
+* Fully reproducible open-source framework
+
+---
+
+## 📂 Repository Structure
+
+```bash
+/src             → ROS 2 implementation  
+/data            → Experimental logs  
+/plots           → Performance graphs  
+/images          → System & print results  
+thesis.pdf       → Full thesis  
+presentation.pdf → Defense slides  
+README.md        → Documentation  
+```
+
+---
+
+## 🎥 Demonstration
+
+[![Watch the video](https://img.youtube.com/vi/ORa4JMzHrFo/0.jpg)](https://www.youtube.com/shorts/ORa4JMzHrFo)
+
+
+---
+
+## 📬 Contact
+
+```bash
+Author: Raj
+Email: rajbag4321@gmail.com
+Location: Berlin, Germany
+```
+
+---
+
+## 🏁 Final Statement
+
+This work demonstrates that reliable robotic additive manufacturing can be achieved using low-cost, open-source systems when proper synchronization strategies are applied.
+
+---
